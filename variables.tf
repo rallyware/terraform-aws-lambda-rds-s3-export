@@ -1,6 +1,6 @@
 variable "lambda_runtime" {
   type        = string
-  default     = "python3.9"
+  default     = "python3.11"
   description = "The runtime environment for the Lambda function you are uploading"
 }
 
@@ -68,22 +68,64 @@ variable "s3_folder" {
   description = "The Amazon S3 bucket folder to use as path of the exported data"
 }
 
-variable "s3_lifecycle_configuration_rules" {
+variable "s3_lifecycle_rules" {
   type = list(object({
-    enabled = bool
-    id      = string
+    enabled                                = optional(bool, true)
+    id                                     = optional(string)
+    abort_incomplete_multipart_upload_days = optional(number)
 
-    abort_incomplete_multipart_upload_days = number
+    filter_and = optional(object({
+      object_size_greater_than = optional(number)
+      object_size_less_than    = optional(number)
+      prefix                   = optional(string)
+      tags                     = optional(map(string), {})
+    }))
 
-    filter_and = any
-    expiration = any
-    transition = list(any)
+    expiration = optional(object({
+      date = optional(string)
+      days = optional(number)
+    }))
 
-    noncurrent_version_expiration = any
-    noncurrent_version_transition = list(any)
+    expired_object_delete_marker = optional(bool)
+
+    noncurrent_version_expiration = optional(object({
+      newer_noncurrent_versions = optional(number)
+      noncurrent_days           = optional(number)
+    }))
+
+    transition = optional(list(object({
+      date          = optional(string)
+      days          = optional(number)
+      storage_class = optional(string)
+    })))
+
+    noncurrent_version_transition = optional(list(object({
+      newer_noncurrent_versions = optional(number)
+      noncurrent_days           = optional(number)
+      storage_class             = optional(string)
+    })))
   }))
-  default     = []
-  description = "A list of lifecycle V2 rules"
+  default = [
+    {
+      id = "rds-s3-export-rotation"
+      expiration = {
+        days = 180
+      }
+      transition = [
+        {
+          days          = 60
+          storage_class = "GLACIER"
+        }
+      ]
+    },
+    {
+      id                                     = "rds-s3-export-delete-expiration-markers"
+      expired_object_delete_marker           = true
+      abort_incomplete_multipart_upload_days = 3
+    }
+  ]
+  description = "A simplified list of S3 lifecycle V2 rules"
+  nullable    = false
 }
 
 variable "key_deletion" {
