@@ -1,7 +1,11 @@
+locals {
+  partition = data.aws_partition.current.partition
+}
+
+data "aws_partition" "current" {}
+
 data "aws_iam_policy_document" "task" {
   count = local.enabled ? 1 : 0
-
-  version = "2012-10-17"
 
   statement {
     sid = "AllowS3"
@@ -13,8 +17,8 @@ data "aws_iam_policy_document" "task" {
       "s3:GetBucketLocation"
     ]
     resources = [
-      "arn:aws:s3:::${module.bucket.bucket_id}",
-      "arn:aws:s3:::${module.bucket.bucket_id}/*"
+      "arn:${local.partition}:s3:::${module.bucket.bucket_id}",
+      "arn:${local.partition}:s3:::${module.bucket.bucket_id}/*"
     ]
     effect = "Allow"
   }

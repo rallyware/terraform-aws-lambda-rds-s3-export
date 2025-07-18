@@ -4,7 +4,7 @@ locals {
 
   cloudwatch_event_patterns = {
     automated_cluster_snapshot_created = {
-      name           = "automated-cluster-snapshot-created"
+      name           = "auto-cluster-snapshot-created"
       detail_message = "Automated cluster snapshot created"
       detail_type    = "RDS DB Cluster Snapshot Event"
     },
@@ -14,7 +14,7 @@ locals {
       detail_type    = "RDS DB Cluster Snapshot Event"
     },
     automated_snapshot_created = {
-      name           = "automated-snapshot-created"
+      name           = "auto-snapshot-created"
       detail_message = "Automated snapshot created"
       detail_type    = "RDS DB Snapshot Event"
     },
