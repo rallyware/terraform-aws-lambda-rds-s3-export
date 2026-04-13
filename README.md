@@ -30,7 +30,7 @@ module "export" {
 |------|--------|---------|
 | <a name="module_bucket"></a> [bucket](#module\_bucket) | cloudposse/s3-bucket/aws | 4.11.0 |
 | <a name="module_kms_key"></a> [kms\_key](#module\_kms\_key) | cloudposse/kms-key/aws | 0.12.2 |
-| <a name="module_lambda"></a> [lambda](#module\_lambda) | rallyware/lambda-function/aws | 0.3.0 |
+| <a name="module_lambda"></a> [lambda](#module\_lambda) | rallyware/lambda-function/aws | 0.4.5 |
 | <a name="module_role"></a> [role](#module\_role) | cloudposse/iam-role/aws | 0.23.0 |
 | <a name="module_this"></a> [this](#module\_this) | cloudposse/label/null | 0.25.0 |
 ## Resources
@@ -38,7 +38,6 @@ module "export" {
 | Name | Type |
 |------|------|
 | [aws_cloudwatch_log_metric_filter.errors](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_log_metric_filter) | resource |
-| [aws_iam_policy.lambda](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
 | [archive_file.build](https://registry.terraform.io/providers/hashicorp/archive/latest/docs/data-sources/file) | data source |
 | [aws_iam_policy_document.lambda](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.task](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
