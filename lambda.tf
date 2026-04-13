@@ -102,19 +102,9 @@ data "aws_iam_policy_document" "lambda" {
   }
 }
 
-resource "aws_iam_policy" "lambda" {
-  count = local.enabled ? 1 : 0
-
-  name        = "${module.this.id}-lambda"
-  description = var.lambda_policy_description
-  policy      = data.aws_iam_policy_document.lambda[0].json
-
-  tags = module.this.tags
-}
-
 module "lambda" {
   source  = "rallyware/lambda-function/aws"
-  version = "0.3.0"
+  version = "0.4.5"
 
   handler          = "main.lambda_handler"
   filename         = one(data.archive_file.build[*].output_path)
@@ -125,8 +115,11 @@ module "lambda" {
   memory_size      = var.lambda_memory
   timeout          = var.lambda_timeout
 
+  iam_policy_description = var.lambda_policy_description
   iam_role_description   = var.lambda_role_description
-  custom_iam_policy_arns = local.enabled ? [aws_iam_policy.lambda[0].arn] : []
+  iam_policy_documents = [
+    one(data.aws_iam_policy_document.lambda[*].json)
+  ]
 
   cloudwatch_logs_retention_in_days = var.lambda_log_retention
 
