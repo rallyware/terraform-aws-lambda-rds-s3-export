@@ -26,4 +26,5 @@ jobs:
           reporter: github-pr-review
           fail_level: "error"
           filter_mode: "nofilter"
+          tflint_init: true
           flags: "--call-module-type=all"
