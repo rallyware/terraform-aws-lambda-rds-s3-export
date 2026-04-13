@@ -1,158 +1,66 @@
 locals {
-  enabled    = module.this.enabled
-  lambda_src = "${path.module}/lambda"
-
-  cloudwatch_event_patterns = {
-    automated_cluster_snapshot_created = {
-      name           = "auto-cluster-snapshot-created"
-      detail_message = "Automated cluster snapshot created"
-      detail_type    = "RDS DB Cluster Snapshot Event"
-    },
-    manual_cluster_snapshot_created = {
-      name           = "manual-cluster-snapshot-created"
-      detail_message = "Manual cluster snapshot created"
-      detail_type    = "RDS DB Cluster Snapshot Event"
-    },
-    automated_snapshot_created = {
-      name           = "auto-snapshot-created"
-      detail_message = "Automated snapshot created"
-      detail_type    = "RDS DB Snapshot Event"
-    },
-    manual_snapshot_created = {
-      name           = "manual-snapshot-created"
-      detail_message = "Manual snapshot created"
-      detail_type    = "RDS DB Snapshot Event"
-    }
-  }
+  partition = data.aws_partition.current.partition
 }
 
-resource "random_id" "build" {
-  count = local.enabled ? 1 : 0
+data "aws_partition" "current" {}
 
-  byte_length = 8
-  keepers = {
-    hash = filesha256("${local.lambda_src}/main.py")
-  }
+module "kms_key" {
+  source  = "cloudposse/kms-key/aws"
+  version = "0.12.2"
+
+  description             = var.key_description
+  deletion_window_in_days = var.key_deletion
+
+  context = module.this.context
 }
 
-data "archive_file" "build" {
-  count = local.enabled ? 1 : 0
+module "bucket" {
+  source             = "cloudposse/s3-bucket/aws"
+  version            = "4.11.0"
+  sse_algorithm      = "aws:kms"
+  kms_master_key_arn = module.kms_key.key_arn
 
-  source_dir  = local.lambda_src
-  output_path = "/tmp/${random_id.build[0].hex}.zip"
-  type        = "zip"
+  lifecycle_configuration_rules = var.s3_lifecycle_rules
+
+  context = module.this.context
 }
 
-data "aws_iam_policy_document" "lambda" {
+data "aws_iam_policy_document" "task" {
   count = local.enabled ? 1 : 0
-
-  version = "2012-10-17"
 
   statement {
-    sid = "AllowExportDescribeSnapshot"
+    sid = "AllowS3"
     actions = [
-      "rds:StartExportTask",
-      "rds:DescribeDBSnapshots",
-      "rds:DescribeDBClusterSnapshots"
+      "s3:PutObject*",
+      "s3:ListBucket",
+      "s3:GetObject*",
+      "s3:DeleteObject*",
+      "s3:GetBucketLocation"
     ]
     resources = [
-      "*"
+      "arn:${local.partition}:s3:::${module.bucket.bucket_id}",
+      "arn:${local.partition}:s3:::${module.bucket.bucket_id}/*"
     ]
     effect = "Allow"
   }
-
-  statement {
-    sid = "AllowGetPassRole"
-    actions = [
-      "iam:GetRole",
-      "iam:PassRole"
-    ]
-    resources = [
-      module.role.arn
-    ]
-    effect = "Allow"
-  }
-
-  statement {
-    sid = "AllowExportKeyKMS"
-    actions = [
-      "kms:Encrypt",
-      "kms:Decrypt",
-      "kms:GenerateDataKey",
-      "kms:GenerateDataKeyWithoutPlaintext",
-      "kms:ReEncryptFrom",
-      "kms:ReEncryptTo",
-      "kms:CreateGrant",
-      "kms:DescribeKey",
-      "kms:RetireGrant",
-    ]
-    resources = [
-      module.kms_key.key_arn
-    ]
-    effect = "Allow"
-  }
-
-  statement {
-    sid = "AllowKMSByAlias"
-    actions = [
-      "kms:Decrypt",
-      "kms:GenerateDataKey*",
-      "kms:DescribeKey",
-      "kms:CreateGrant"
-    ]
-
-    condition {
-      test     = "ForAnyValue:StringLike"
-      variable = "kms:ResourceAliases"
-      values   = var.allowed_kms_aliases
-    }
-
-    resources = ["*"]
-  }
 }
 
-module "lambda" {
-  source  = "rallyware/lambda-function/aws"
-  version = "0.3.0"
+module "role" {
+  source  = "cloudposse/iam-role/aws"
+  version = "0.23.0"
 
-  handler       = "main.lambda_handler"
-  filename      = one(data.archive_file.build[*].output_path)
-  description   = var.lambda_description
-  runtime       = var.lambda_runtime
-  architectures = var.lambda_architectures
-  memory_size   = var.lambda_memory
-  timeout       = var.lambda_timeout
-
-  iam_policy_description = var.lambda_policy_description
-  iam_role_description   = var.lambda_role_description
-  iam_policy_documents = [
-    one(data.aws_iam_policy_document.lambda[*].json)
+  role_description      = var.role_description
+  policy_description    = var.role_policy_description
+  policy_document_count = 1
+  policy_documents = [
+    one(data.aws_iam_policy_document.task[*].json)
   ]
 
-  cloudwatch_logs_retention_in_days = var.lambda_log_retention
-
-  cloudwatch_event_rules = [for k, v in var.lambda_triggers :
-    {
-      name = local.cloudwatch_event_patterns[k]["name"]
-      event_pattern = jsonencode(
-        {
-          detail-type = [local.cloudwatch_event_patterns[k]["detail_type"]]
-          detail = {
-            Message = [local.cloudwatch_event_patterns[k]["detail_message"]]
-          }
-        }
-      )
-    } if v
-  ]
-
-  lambda_environment = {
-    variables = {
-      BACKUP_S3_BUCKET   = module.bucket.bucket_id
-      BACKUP_FOLDER      = var.s3_folder
-      BACKUP_KMS_KEY     = module.kms_key.key_id
-      BACKUP_EXPORT_ROLE = module.role.arn
-    }
+  principals = {
+    "Service" : ["export.rds.amazonaws.com"]
   }
+
+  attributes = concat(module.this.attributes, ["task"])
 
   context = module.this.context
 }
