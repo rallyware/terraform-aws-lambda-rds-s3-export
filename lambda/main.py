@@ -13,26 +13,27 @@ BACKUP_KMS_KEY = os.environ["BACKUP_KMS_KEY"]
 BACKUP_EXPORT_ROLE = os.environ["BACKUP_EXPORT_ROLE"]
 BACKUP_FOLDER = os.environ["BACKUP_FOLDER"]
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+rds_client = boto3.client("rds")
 
 
 def lambda_handler(event, context):
     snapshot_arn = event["detail"]["SourceArn"]
     event_id = event["detail"]["EventID"]
 
-    boto3_session = boto3.Session()
-    rds_client = boto3_session.client("rds")
-
     instance_id = None
     snapshot_time = None
-
     if event_id in [AUTOMATED_SNAPSHOT_CREATED, MANUAL_SNAPSHOT_CREATED]:
         response = rds_client.describe_db_snapshots(DBSnapshotIdentifier=snapshot_arn)
         instance_id = response["DBSnapshots"][0]["DBInstanceIdentifier"]
         snapshot_time = response["DBSnapshots"][0]["SnapshotCreateTime"]
 
-    elif event_id in [AUTOMATED_CLUSTER_SNAPSHOT_CREATED, MANUAL_CLUSTER_SNAPSHOT_CREATED]:
+    elif event_id in [
+        AUTOMATED_CLUSTER_SNAPSHOT_CREATED,
+        MANUAL_CLUSTER_SNAPSHOT_CREATED,
+    ]:
         response = rds_client.describe_db_cluster_snapshots(
             DBClusterSnapshotIdentifier=snapshot_arn
         )
@@ -40,19 +41,25 @@ def lambda_handler(event, context):
         snapshot_time = response["DBClusterSnapshots"][0]["SnapshotCreateTime"]
 
     else:
-        raise RuntimeError("Unsupported EventID: {0}".format(event_id))
+        raise RuntimeError(f"Unsupported EventID: {event_id}")
 
-    s3_prefix = "{0}/{1}".format(BACKUP_FOLDER, instance_id)
+    s3_prefix = f"{BACKUP_FOLDER}/{instance_id}"
     timestamp = snapshot_time.strftime("%y%m%d%H%M")
-    export_id = "{0}-{1}".format("".join(filter(str.isalnum, instance_id)), timestamp)
+    sanitized_id = "".join(filter(str.isalnum, instance_id))
+    export_id = f"{sanitized_id}-{timestamp}"
 
-    rds_client.start_export_task(
-        ExportTaskIdentifier=export_id,
-        SourceArn=snapshot_arn,
-        S3BucketName=BACKUP_S3_BUCKET,
-        IamRoleArn=BACKUP_EXPORT_ROLE,
-        KmsKeyId=BACKUP_KMS_KEY,
-        S3Prefix=s3_prefix,
-    )
+    try:
+        rds_client.start_export_task(
+            ExportTaskIdentifier=export_id,
+            SourceArn=snapshot_arn,
+            S3BucketName=BACKUP_S3_BUCKET,
+            IamRoleArn=BACKUP_EXPORT_ROLE,
+            KmsKeyId=BACKUP_KMS_KEY,
+            S3Prefix=s3_prefix,
+        )
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to start export task for {snapshot_arn}: {e}"
+        ) from e
 
-    logger.info("ExportTaskIdentifier={0}, SourceArn={1}".format(export_id, snapshot_arn))
+    logger.info(f"ExportTaskIdentifier={export_id}, SourceArn={snapshot_arn}")

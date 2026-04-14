@@ -1,6 +1,6 @@
 variable "lambda_runtime" {
   type        = string
-  default     = "python3.11"
+  default     = "python3.13"
   description = "The runtime environment for the Lambda function you are uploading"
 }
 
@@ -159,4 +159,16 @@ variable "allowed_kms_aliases" {
   type        = list(string)
   default     = ["alias/*rds*"]
   description = "A list of KMS aliases that are allowed to be used by the lambda function"
+}
+
+variable "metric_namespace" {
+  type        = string
+  default     = "Custom/Lambda"
+  description = "CloudWatch metric namespace for Lambda error metrics"
+}
+
+variable "log_error_pattern" {
+  type        = string
+  default     = "Error"
+  description = "CloudWatch Logs metric filter pattern for errors"
 }
