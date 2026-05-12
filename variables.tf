@@ -62,6 +62,17 @@ variable "lambda_triggers" {
   description = "Specifies which RDS snapshot events will trigger the lambda function"
 }
 
+variable "snapshot_source_filter" {
+  type        = string
+  default     = null
+  description = "Restrict triggers to snapshots from a specific origin. One of: \"rds\", \"backup\", or null for no filter."
+
+  validation {
+    condition     = var.snapshot_source_filter == null || contains(["rds", "backup"], var.snapshot_source_filter)
+    error_message = "snapshot_source_filter must be null, \"rds\", or \"backup\"."
+  }
+}
+
 variable "s3_folder" {
   type        = string
   default     = "instance"
