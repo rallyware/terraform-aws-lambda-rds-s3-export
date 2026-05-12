@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 import boto3
 
@@ -12,6 +13,8 @@ BACKUP_S3_BUCKET = os.environ["BACKUP_S3_BUCKET"]
 BACKUP_KMS_KEY = os.environ["BACKUP_KMS_KEY"]
 BACKUP_EXPORT_ROLE = os.environ["BACKUP_EXPORT_ROLE"]
 BACKUP_FOLDER = os.environ["BACKUP_FOLDER"]
+SNAPSHOT_ARN_PATTERN = os.environ.get("SNAPSHOT_ARN_PATTERN", "")
+snapshot_arn_filter = re.compile(SNAPSHOT_ARN_PATTERN) if SNAPSHOT_ARN_PATTERN else None
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -22,6 +25,10 @@ rds_client = boto3.client("rds")
 def lambda_handler(event, context):
     snapshot_arn = event["detail"]["SourceArn"]
     event_id = event["detail"]["EventID"]
+
+    if snapshot_arn_filter and not snapshot_arn_filter.search(snapshot_arn):
+        logger.info(f"Skipping snapshot (does not match filter): {snapshot_arn}")
+        return
 
     instance_id = None
     snapshot_time = None

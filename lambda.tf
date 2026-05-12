@@ -2,26 +2,39 @@ locals {
   enabled            = module.this.enabled
   lambda_source_file = "lambda/main.py"
 
-  cloudwatch_event_patterns = {
+  snapshot_arn_patterns = {
+    rds    = "^arn:aws:rds:[^:]+:[^:]+:(?:cluster-)?snapshot:(?:rds:)?[^:]+$"
+    backup = "^arn:aws:rds:[^:]+:[^:]+:(?:cluster-)?snapshot:awsbackup:.+$"
+  }
+
+  event_rule_catalog = {
     automated_cluster_snapshot_created = {
-      name        = "auto-cluster-snapshot-created"
-      detail_type = "RDS DB Cluster Snapshot Event"
-      event_id    = "RDS-EVENT-0169"
-    },
-    manual_cluster_snapshot_created = {
-      name        = "manual-cluster-snapshot-created"
-      detail_type = "RDS DB Cluster Snapshot Event"
-      event_id    = "RDS-EVENT-0075"
-    },
+      name = "auto-cluster-snapshot-created"
+      pattern = {
+        source = ["aws.rds"]
+        detail = { EventID = ["RDS-EVENT-0169"] }
+      }
+    }
     automated_snapshot_created = {
-      name        = "auto-snapshot-created"
-      detail_type = "RDS DB Snapshot Event"
-      event_id    = "RDS-EVENT-0091"
-    },
+      name = "auto-snapshot-created"
+      pattern = {
+        source = ["aws.rds"]
+        detail = { EventID = ["RDS-EVENT-0091"] }
+      }
+    }
+    manual_cluster_snapshot_created = {
+      name = "manual-cluster-snapshot-created"
+      pattern = {
+        source = ["aws.rds"]
+        detail = { EventID = ["RDS-EVENT-0075"] }
+      }
+    }
     manual_snapshot_created = {
-      name        = "manual-snapshot-created"
-      detail_type = "RDS DB Snapshot Event"
-      event_id    = "RDS-EVENT-0042"
+      name = "manual-snapshot-created"
+      pattern = {
+        source = ["aws.rds"]
+        detail = { EventID = ["RDS-EVENT-0042"] }
+      }
     }
   }
 }
@@ -123,27 +136,21 @@ module "lambda" {
 
   cloudwatch_logs_retention_in_days = var.lambda_log_retention
 
-  cloudwatch_event_rules = [for k, v in var.lambda_triggers :
-    {
-      name = local.cloudwatch_event_patterns[k]["name"]
-      event_pattern = jsonencode(
-        {
-          source      = ["aws.rds"]
-          detail-type = [local.cloudwatch_event_patterns[k]["detail_type"]]
-          detail = {
-            EventID = [local.cloudwatch_event_patterns[k]["event_id"]]
-          }
-        }
-      )
-    } if v
+  cloudwatch_event_rules = [
+    for k, rule in local.event_rule_catalog : {
+      name          = rule.name
+      event_pattern = jsonencode(rule.pattern)
+    }
+    if var.lambda_triggers[k]
   ]
 
   lambda_environment = {
     variables = {
-      BACKUP_S3_BUCKET   = module.bucket.bucket_id
-      BACKUP_FOLDER      = var.s3_folder
-      BACKUP_KMS_KEY     = module.kms_key.key_id
-      BACKUP_EXPORT_ROLE = module.role.arn
+      BACKUP_S3_BUCKET     = module.bucket.bucket_id
+      BACKUP_FOLDER        = var.s3_folder
+      BACKUP_KMS_KEY       = module.kms_key.key_id
+      BACKUP_EXPORT_ROLE   = module.role.arn
+      SNAPSHOT_ARN_PATTERN = var.snapshot_source_filter == null ? "" : local.snapshot_arn_patterns[var.snapshot_source_filter]
     }
   }
 
