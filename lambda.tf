@@ -117,7 +117,7 @@ data "aws_iam_policy_document" "lambda" {
 
 module "lambda" {
   source  = "rallyware/lambda-function/aws"
-  version = "0.4.5"
+  version = "0.5.1"
 
   handler          = "main.lambda_handler"
   filename         = one(data.archive_file.build[*].output_path)
